@@ -1,0 +1,15 @@
+{
+  "serial_port": "/dev/ttyACM0",
+  "channels": ["#bot-test"],
+  "channel_secrets": [
+    "eee642a078e17d90283fbdf4b743eef4",
+    "eb50a1bcb3e4e5d7bf69a57c9dada211",
+    "32184cd5918aac1243f17de98dd115ad"
+  ],
+  "log_file": "testbot.log",
+  "discord_bot_token": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "mc_chan_to_discord_chan_id": {
+    "#bot-test": 1512086433186320496,
+    "#pulawy": 1512086521019367604
+  }
+}

@@ -1,0 +1,16 @@
+[Unit]
+Description=TestBot service
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/mcbot
+ExecStart=/home/pi/mcbot/venv/bin/python /home/pi/mcbot/testbot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

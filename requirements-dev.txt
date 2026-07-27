@@ -1,0 +1,6 @@
+iniconfig==2.3.0
+packaging==26.2
+pluggy==1.6.0
+prompt_toolkit==3.0.52
+pytest==9.0.3
+ruff==0.15.15

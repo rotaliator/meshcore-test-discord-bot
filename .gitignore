@@ -1,0 +1,6 @@
+__pycache__/
+
+testbot.json
+*.log
+.aider*
+LOCAL_README.md
