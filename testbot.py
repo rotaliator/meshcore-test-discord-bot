@@ -372,7 +372,13 @@ async def main():
     logging.info(f"Connecting to {SERIAL_PORT} ...")
     global mesh
     try:
-        mesh = await MeshCore.create_serial(SERIAL_PORT, 115200, debug=False)
+        mesh = await MeshCore.create_serial(
+            SERIAL_PORT,
+            115200,
+            debug=False,
+            auto_reconnect=True,
+            max_reconnect_attempts=sys.maxsize,
+        )
     except Exception as e:
         logging.error(e)
         exit(1)
