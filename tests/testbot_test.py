@@ -102,3 +102,56 @@ def test_split_message():
         "1/2 @[rotaliator🚲]re: Test again | bytes=2 | path1=direct; path2=11ab00,ababab,123456; path3=d7c700,",
         "2/2 ababab,123456",
     ]
+
+
+test_path_events1 = [
+        SimpleNamespace(
+            payload={'path': '7a9b8d028b009c3d2d8c8cf2435dd7c7',
+                     'path_hash_size': 2},
+        ),
+        SimpleNamespace(
+            payload={'path': '7a9b8d028b009c3d2d8c8cf2435dd7c711ab',
+                     'path_hash_size': 2}
+        ),
+        SimpleNamespace(
+            payload={'path': '7a9b8d028b009c3d2d8c8cf2435dd7c7aaf5',
+                     'path_hash_size': 2}
+        ),
+]
+
+test_path_events2 = [
+        SimpleNamespace(
+            payload={'path': '7a9b8d028b00',
+                     'path_hash_size': 2},
+        ),
+        SimpleNamespace(
+            payload={'path': '7a9b8d028b009c3d2d8c8cf2435dd7c7',
+                     'path_hash_size': 2}
+        ),
+        SimpleNamespace(
+            payload={'path': '7a9b8d028b009c3d2d8c8cf2435dd7c7aaf5',
+                     'path_hash_size': 2}
+        ),
+]
+
+def test_format_paths():
+    paths = sut.format_paths(test_path_events1, 2)
+    assert paths == [
+        "path1=7a9b,8d02,8b00,9c3d,2d8c,8cf2,435d,d7c7",
+        "path2=7a9b,8d02,8b00,9c3d,2d8c,8cf2,435d,d7c7,11ab",
+        "path3=7a9b,8d02,8b00,9c3d,2d8c,8cf2,435d,d7c7,aaf5",
+    ]
+
+def test_format_paths_compact():
+    paths = sut.format_paths_compact(test_path_events1, 2)
+    assert paths == [
+        "path1=7a9b,8d02,8b00,9c3d,2d8c,8cf2,435d,d7c7",
+        "path2=path1+11ab",
+        "path3=path1+aaf5",
+    ]
+    paths = sut.format_paths_compact(test_path_events2, 2)
+    assert paths == [
+        "path1=7a9b,8d02,8b00",
+        "path2=path1+9c3d,2d8c,8cf2,435d,d7c7",
+        "path3=path2+aaf5",
+    ]

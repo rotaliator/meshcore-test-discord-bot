@@ -173,6 +173,81 @@ def batch_by_pkt_hash(window_seconds=6, maxsize=10000):
 
     return decorator
 
+def format_paths(events, path_hash_size):
+    paths = []
+    for n, event in enumerate(events, start=1):
+        payload = event.payload
+        path = payload.get("path")
+        paths.append(f"path{n}={format_path(path, path_hash_size)}")
+    return paths
+
+def format_paths_compact(events, path_hash_size):
+    """
+    Format paths using references to previously defined paths when this
+    results in a shorter representation.
+
+    A path can reference any previous path if:
+    - they share at least 3 consecutive hops from the beginning
+    - the compact representation is shorter than the full representation
+    """
+
+    # First convert all paths to lists of formatted hop hashes.
+    all_paths = []
+
+    for event in events:
+        payload = event.payload
+        path = payload.get("path")
+
+        formatted = format_path(path, path_hash_size)
+        hops = formatted.split(",") if formatted else []
+
+        all_paths.append(hops)
+
+    result = []
+
+    for i, current_path in enumerate(all_paths):
+        path_number = i + 1
+
+        # Full representation is always our fallback.
+        full_path = ",".join(current_path)
+        best = f"path{path_number}={full_path}"
+
+        # Check all previously defined paths as possible references.
+        for j in range(i):
+            previous_path = all_paths[j]
+
+            # Find the length of the common prefix.
+            common = 0
+
+            while (
+                common < len(previous_path)
+                and common < len(current_path)
+                and previous_path[common] == current_path[common]
+            ):
+                common += 1
+
+            # Only use a reference if at least 3 hops are shared.
+            if common < 3:
+                continue
+
+            # Everything after the common prefix is the suffix.
+            suffix = current_path[common:]
+
+            if suffix:
+                candidate = (
+                    f"path{path_number}=path{j + 1}+{','.join(suffix)}"
+                )
+            else:
+                # This means the current path is identical to the previous one.
+                candidate = f"path{path_number}=path{j + 1}"
+
+            # Keep the compact representation only if it actually saves space.
+            if len(candidate) < len(best):
+                best = candidate
+
+        result.append(best)
+
+    return result
 
 def prepare_response(events):
     payload = events[0].payload
@@ -183,16 +258,7 @@ def prepare_response(events):
     text = message.get("message")
     path_hash_size = payload.get("path_hash_size", 1)
 
-    paths = []
-
-    # create paths
-    for n, event in enumerate(events, start=1):
-        payload = event.payload
-        # routing
-        # hops = payload.get("path_len", 0)
-        path = payload.get("path")
-        paths.append(f"path{n}={format_path(path, path_hash_size)}")
-
+    paths = format_paths_compact(events, path_hash_size)
     path_info = "; ".join(paths)
     response = format_batch_response(text, sender, path_hash_size, path_info)
     return response
