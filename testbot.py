@@ -181,14 +181,23 @@ def format_paths(events, path_hash_size):
         paths.append(f"path{n}={format_path(path, path_hash_size)}")
     return paths
 
-def format_paths_compact(events, path_hash_size):
+def format_paths_compact(events, path_hash_size, min_common_hops=3):
     """
     Format paths using references to previously defined paths when this
     results in a shorter representation.
 
     A path can reference any previous path if:
-    - they share at least 3 consecutive hops from the beginning
+    - they share at least `min_common_hops` consecutive hops from the beginning
     - the compact representation is shorter than the full representation
+
+    Args:
+        events: Iterable of events containing path information.
+        path_hash_size: Hash size passed to format_path().
+        min_common_hops: Minimum number of common hops required to use
+                         a path reference. Defaults to 3.
+
+    Returns:
+        A list of compactly formatted path strings.
     """
 
     # First convert all paths to lists of formatted hop hashes.
@@ -226,8 +235,8 @@ def format_paths_compact(events, path_hash_size):
             ):
                 common += 1
 
-            # Only use a reference if at least 3 hops are shared.
-            if common < 3:
+            # Only use a reference if enough hops are shared.
+            if common < min_common_hops:
                 continue
 
             # Everything after the common prefix is the suffix.
@@ -238,7 +247,7 @@ def format_paths_compact(events, path_hash_size):
                     f"path{path_number}=path{j + 1}+{','.join(suffix)}"
                 )
             else:
-                # This means the current path is identical to the previous one.
+                # The current path is identical to the previous one.
                 candidate = f"path{path_number}=path{j + 1}"
 
             # Keep the compact representation only if it actually saves space.
@@ -258,7 +267,7 @@ def prepare_response(events):
     text = message.get("message")
     path_hash_size = payload.get("path_hash_size", 1)
 
-    paths = format_paths_compact(events, path_hash_size)
+    paths = format_paths_compact(events, path_hash_size, min_common_hops=2)
     path_info = "; ".join(paths)
     response = format_batch_response(text, sender, path_hash_size, path_info)
     return response
@@ -357,7 +366,7 @@ def format_batch_response(text, sender, path_hash_size, path_info):
     return response
 
 
-def split_message(message, max_length=100, split_at=" |;,"):
+def split_message(message, max_length=115, split_at=" |;,+"):
     if len(message) <= max_length:
         return [message]
 
