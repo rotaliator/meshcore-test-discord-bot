@@ -1,18 +1,18 @@
-import asyncio
-from pprint import pformat
-
+from cachetools import TTLCache
+from discord.ext import commands
+from functools import wraps
 from meshcore import MeshCore, EventType
 from meshcoredecoder import MeshCoreDecoder
 from meshcoredecoder.crypto import MeshCoreKeyStore
 from meshcoredecoder.types.crypto import DecryptionOptions
-from meshcoredecoder.types.enums import PayloadType
-from cachetools import TTLCache
-from functools import wraps
+from meshcoredecoder.types.enums import PayloadType, RouteType
+from pprint import pformat
+import asyncio
+import discord
+import hashlib
 import json
 import logging
 import sys
-import discord
-from discord.ext import commands
 
 with open("testbot.json") as f:
     config = json.load(f)
@@ -43,6 +43,10 @@ MAX_QUOTE_SIZE = int(config.get("max_quote_size", "20"))
 WINDOW_SECONDS = int(config.get("window_seconds", "6"))
 DISCORD_BOT_TOKEN = config.get("discord_bot_token")
 MC_CHAN_TO_DISCORD_CHAN_ID = config.get("mc_chan_to_discord_chan_id", {})
+ADD_CORESCOPE_LINK = config.get("add_corescope_link", False)
+CORESCOPE_URL = config.get(
+    "corescope_url", "https://analyzer.marwoj.net/#/map?packet={corescope_hash}"
+)
 
 key_store = MeshCoreKeyStore({"channel_secrets": config.get("channel_secrets", [])})
 decryption_options = DecryptionOptions(key_store=key_store)
@@ -342,6 +346,51 @@ def decrypt_message(payload):
         return text.decrypted
 
 
+def compute_content_hash(raw_hex):
+    """Mirror CoreScope ComputeContentHash: SHA-256(payload-type nibble + payload).
+
+    Skips header and path bytes so the hash identifies the same logical packet
+    regardless of the route it took. TRACE packets include the path byte to
+    match firmware behavior. Returns the first 16 hex chars of the SHA-256.
+    """
+    try:
+        buf = bytes.fromhex(raw_hex)
+    except ValueError:
+        return raw_hex[:16] if len(raw_hex) >= 16 else raw_hex
+
+    if len(buf) < 2:
+        return raw_hex[:16] if len(raw_hex) >= 16 else raw_hex
+
+    header_byte = buf[0]
+    offset = 1
+
+    if (header_byte & 0x03) in (RouteType.TransportFlood.value, RouteType.TransportDirect.value):
+        offset += 4
+
+    if offset >= len(buf):
+        return raw_hex[:16] if len(raw_hex) >= 16 else raw_hex
+
+    path_byte = buf[offset]
+    offset += 1
+    hash_size = ((path_byte >> 6) & 0x3) + 1
+    hash_count = path_byte & 0x3F
+    path_bytes = hash_size * hash_count
+
+    payload_start = offset + path_bytes
+    if payload_start > len(buf):
+        return raw_hex[:16] if len(raw_hex) >= 16 else raw_hex
+
+    payload = buf[payload_start:]
+
+    payload_type = (header_byte >> 2) & 0x0F
+    to_hash = bytes([payload_type])
+    if payload_type == PayloadType.Trace.value:
+        to_hash += bytes([path_byte, 0x00])
+    to_hash += payload
+
+    return hashlib.sha256(to_hash).hexdigest()[:16]
+
+
 def format_response(text, sender, hops, path_hash_size, path):
     text = text.strip()
     if len(text) > MAX_QUOTE_SIZE:
@@ -394,7 +443,7 @@ def split_message(message, max_length=115, split_at=" |;,+"):
     return result
 
 
-async def send_to_discord(chan_name: str, message: dict):
+async def send_to_discord(chan_name: str, message: dict, extra_message: str=""):
     """Send a MeshCore message to the corresponding Discord channel."""
     discord_chan_id = MC_CHAN_TO_DISCORD_CHAN_ID.get(chan_name)
     if not discord_chan_id or not discord_bot:
@@ -405,14 +454,15 @@ async def send_to_discord(chan_name: str, message: dict):
         return
 
     sender = message.get("sender", "unknown")
-    text = message.get("message", "")
+    text = message.get("message", "") + " " + extra_message
+    text = text.strip()
 
     discord_msg = f"**[{sender}]** {text}"
 
     logging.info(f"Attempting to send to Discord channel {discord_chan_id}")
     channel = discord_bot.get_channel(discord_chan_id)
     if channel:
-        await channel.send(discord_msg)
+        await channel.send(discord_msg, suppress_embeds=True)
         logging.info(f"Sent to Discord channel {discord_chan_id}: {discord_msg}")
     else:
         logging.warning(f"Discord channel {discord_chan_id} not found")
@@ -522,8 +572,17 @@ async def main():
             logging.info(f"Skipping forwarding message sent by {bot_name}")
             return
 
+        if ADD_CORESCOPE_LINK:
+            payload_hex = payload.get("payload")
+            logging.info(f"Calculating corescope hash for {payload_hex}")
+            corescope_hash = compute_content_hash(payload_hex)
+            analyzer_url = CORESCOPE_URL.format(corescope_hash=corescope_hash)
+            extra_message = f"[[go to analyzer]]({analyzer_url})"
+            logger.info(chan_name + " -> " + message.get("message", "") + " " + analyzer_url)
+        else:
+            extra_message = ""
         logging.info(f"discord_forwarder: forwarding {pformat(message)} from {sender} on {chan_name}")
-        await send_to_discord(chan_name, message)
+        await send_to_discord(chan_name, message, extra_message)
 
     async def main_handler(event: EventType):
         logging.info(f"main_handler: received event type {event.type}")
