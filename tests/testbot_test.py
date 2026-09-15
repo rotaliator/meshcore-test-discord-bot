@@ -80,26 +80,26 @@ def test_prepare_response():
     response = sut.prepare_response(events)
     assert (
         response
-        == "@[rotaliator🚲]re: Test again | bytes=2 | path1=direct; path2=11ab; path3=d7c7"
+        == "@[rotaliator🚲]re: Test again|path1=direct; path2=11ab; path3=d7c7"
     )
 
 
 def test_split_message():
-    short_message = "@[rotaliator🚲]re: Test again | bytes=2 | path1=direct; path2=11ab; path3=d7c7"
+    short_message = "@[rotaliator🚲]re: Test again|path1=direct; path2=11ab; path3=d7c7"
     splitted_message = sut.split_message(short_message, max_length=100)
     assert splitted_message == [short_message]
 
 
     splitted_message = sut.split_message(short_message, max_length=50)
     assert splitted_message == [
-        "1/2 @[rotaliator🚲]re: Test again | bytes=2 |",
-        "2/2 path1=direct; path2=11ab; path3=d7c7",
+        "1/2 @[rotaliator🚲]re: Test again|path1=direct;",
+        "2/2 path2=11ab; path3=d7c7",
     ]
 
-    long_message = "@[rotaliator🚲]re: Test again | bytes=2 | path1=direct; path2=11ab00,ababab,123456; path3=d7c700,ababab,123456"
-    splitted_message = sut.split_message(long_message, max_length=100)
+    long_message = "@[rotaliator🚲]re: Test again|path1=direct; path2=11ab00,ababab,123456; path3=d7c700,ababab,123456"
+    splitted_message = sut.split_message(long_message, max_length=90)
     assert splitted_message == [
-        "1/2 @[rotaliator🚲]re: Test again | bytes=2 | path1=direct; path2=11ab00,ababab,123456; path3=d7c700,",
+        "1/2 @[rotaliator🚲]re: Test again|path1=direct; path2=11ab00,ababab,123456; path3=d7c700,",
         "2/2 ababab,123456",
     ]
 

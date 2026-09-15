@@ -14,6 +14,7 @@ import json
 import logging
 import sys
 
+
 with open("testbot.json") as f:
     config = json.load(f)
 
@@ -411,7 +412,7 @@ def format_batch_response(text, sender, path_hash_size, path_info):
     if len(text) > MAX_QUOTE_SIZE:
         text = text[: MAX_QUOTE_SIZE - 3] + "..."
 
-    response = f"@[{sender}]re: {text} | bytes={path_hash_size} | {path_info}"
+    response = f"@[{sender}]re: {text}|{path_info}"
     return response
 
 
