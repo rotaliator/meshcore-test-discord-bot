@@ -1,4 +1,5 @@
 from cachetools import TTLCache
+from contextlib import asynccontextmanager
 from discord.ext import commands
 from functools import wraps
 from meshcore import MeshCore, EventType
@@ -61,6 +62,7 @@ channels = {}
 discord_bot = None
 discord_ready = asyncio.Event()
 companion_settings = {}
+send_lock = asyncio.Lock()
 
 
 def filter_events(CHANNELS):
@@ -279,18 +281,35 @@ def prepare_response(events):
     response = format_batch_response(text, sender, path_hash_size, path_info)
     return response
 
-async def send_mc_message(message, chan_name):
-    splitted_message = split_message(message)
-    for msg in splitted_message:
-        result = await mesh.commands.send_chan_msg(channels[chan_name], msg)
-        if result.type == EventType.ERROR:
-            logging.error(f"MC send error: {result.payload}")
-        await asyncio.sleep(1)
+@asynccontextmanager
+async def with_region(region):
+    if region:
+        scope_res = await mesh.commands.set_flood_scope(f"#{region}")
+        if scope_res.type == EventType.ERROR:
+            logging.error(f"MC set scope error: {scope_res.payload}")
+    try:
+        yield
+    finally:
+        if region:
+            reset_res = await mesh.commands.set_flood_scope("*")
+            if reset_res.type == EventType.ERROR:
+                logging.error(f"MC reset scope error: {reset_res.payload}")
 
 
-async def send_response(response, chan_name):
+async def send_mc_message(message, chan_name, region=None):
+    async with send_lock:
+        async with with_region(region):
+            splitted_message = split_message(message)
+            for msg in splitted_message:
+                result = await mesh.commands.send_chan_msg(channels[chan_name], msg)
+                if result.type == EventType.ERROR:
+                    logging.error(f"MC send error: {result.payload}")
+                await asyncio.sleep(1)
+
+
+async def send_response(response, chan_name, region=None):
     logging.info(f"Reply: {response}")
-    await send_mc_message(response, chan_name)
+    await send_mc_message(response, chan_name, region)
 
     # Send response to discord
     logging.info(f"send_response -> send_to_discord; {chan_name} {response}")
@@ -309,8 +328,9 @@ async def process_batch_events(events):
     try:
         payload = events[0].payload
         chan_name = payload.get("chan_name")
+        region = match_region(payload)
         response = prepare_response(events)
-        await send_response(response, chan_name)
+        await send_response(response, chan_name, region)
     except Exception as e:
         logging.error(f"Handler error: {e}")
 
