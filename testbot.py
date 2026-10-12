@@ -583,7 +583,7 @@ async def main():
             logging.error(f"Channel read error {idx}: {e}")
 
     # Start Discord bot in background (non-blocking)
-    discord_task = asyncio.create_task(start_discord_bot())
+    asyncio.create_task(start_discord_bot())
 
     # Wait for Discord to be ready (with timeout)
     try:
