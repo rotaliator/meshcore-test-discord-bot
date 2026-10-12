@@ -155,3 +155,30 @@ def test_format_paths_compact():
         "path2=path1+9c3d,2d8c,8cf2,435d,d7c7",
         "path3=path2+aaf5",
     ]
+
+
+def test_compute_region_transport_code():
+    pkt_payload = bytes.fromhex(
+        "3522f0283d114a131d5b3e83d7ea940f9dcb9515015ffe93e9c2b4fce85881effd527f"
+    )
+    code = sut.compute_region_transport_code("#pl-lu", 5, pkt_payload)
+    assert code.hex() == "2501"
+
+
+def test_match_region():
+    pkt_payload = bytes.fromhex(
+        "3522f0283d114a131d5b3e83d7ea940f9dcb9515015ffe93e9c2b4fce85881effd527f"
+    )
+    sut.REGIONS = ["#pl", "#pl-lu", "#pl-sk", "#pl-mz"]
+    payload = {
+        "transport_code": "25010000",
+        "payload_type": 5,
+        "pkt_payload": pkt_payload,
+    }
+    assert sut.match_region(payload) == "pl-lu"
+
+
+def test_match_region_no_transport_code():
+    sut.REGIONS = ["#pl-lu"]
+    payload = {"payload_type": 5, "pkt_payload": b"\x00"}
+    assert sut.match_region(payload) is None

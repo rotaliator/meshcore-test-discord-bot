@@ -13,5 +13,6 @@
     "#pulawy": 1512086521019367604
   },
   "add_corescope_link": true,
-  "corescope_url": "https://analyzer.marwoj.net/#/map?packet={corescope_hash}"
+  "corescope_url": "https://analyzer.marwoj.net/#/map?packet={corescope_hash}",
+  "regions": ["#pl", "#pl-lu", "#pl-sk", "#pl-mz"]
 }

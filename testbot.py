@@ -10,6 +10,7 @@ from pprint import pformat
 import asyncio
 import discord
 import hashlib
+import hmac
 import json
 import logging
 import sys
@@ -48,6 +49,7 @@ ADD_CORESCOPE_LINK = config.get("add_corescope_link", False)
 CORESCOPE_URL = config.get(
     "corescope_url", "https://analyzer.marwoj.net/#/map?packet={corescope_hash}"
 )
+REGIONS = config.get("regions", [])
 
 key_store = MeshCoreKeyStore({"channel_secrets": config.get("channel_secrets", [])})
 decryption_options = DecryptionOptions(key_store=key_store)
@@ -392,6 +394,28 @@ def compute_content_hash(raw_hex):
     return hashlib.sha256(to_hash).hexdigest()[:16]
 
 
+def compute_region_transport_code(region_name, payload_type, pkt_payload):
+    region_key = hashlib.sha256(region_name.encode()).digest()[:16]
+    return hmac.new(
+        region_key, bytes([payload_type]) + pkt_payload, hashlib.sha256
+    ).digest()[:2]
+
+
+def match_region(payload):
+    transport_code = payload.get("transport_code")
+    payload_type = payload.get("payload_type")
+    pkt_payload = payload.get("pkt_payload")
+    if not transport_code or payload_type is None or pkt_payload is None:
+        return None
+    for name in REGIONS:
+        if (
+            compute_region_transport_code(name, payload_type, pkt_payload).hex()
+            == transport_code[:4]
+        ):
+            return name.lstrip("#")
+    return None
+
+
 def format_response(text, sender, hops, path_hash_size, path):
     text = text.strip()
     if len(text) > MAX_QUOTE_SIZE:
@@ -564,6 +588,8 @@ async def main():
         message = decrypt_message(payload["payload"])
         if not message:
             return
+        logging.info(f"discord_forwarder: full event payload:\n{pformat(payload)}")
+        logging.info(f"discord_forwarder: decrypted message:\n{pformat(message)}")
         # Do not forward messages sent by Bot
         sender = message.get('sender')
         bot_name = companion_settings.get('name')
@@ -582,6 +608,9 @@ async def main():
             logger.info(chan_name + " -> " + message.get("message", "") + " " + analyzer_url)
         else:
             extra_message = ""
+        region = match_region(payload)
+        if region:
+            extra_message = f"[region: {region}] " + extra_message
         logging.info(f"discord_forwarder: forwarding {pformat(message)} from {sender} on {chan_name}")
         await send_to_discord(chan_name, message, extra_message)
 
